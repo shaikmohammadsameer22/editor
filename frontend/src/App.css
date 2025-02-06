@@ -1,0 +1,30 @@
+.remote-cursor {
+  position: relative;
+}
+
+.inline-remote-cursor {
+  width: 2px;
+  background-color: white;
+}
+
+.cursor-label {
+  position: absolute;
+  top: -20px; /* Position it above the cursor */
+  font-size: 12px;
+  font-weight: bold;
+  padding: 2px 4px;
+  border-radius: 4px;
+  white-space: nowrap;
+  display: block;
+  pointer-events: none;
+  background-color: rgba(0, 0, 0, 0.3); /* Slight background to enhance visibility */
+  color: white;
+}
+
+/* Dynamic color assignment */
+.user-1 { color: #FF5733; }
+.user-2 { color: #33FF57; }
+.user-3 { color: #3357FF; }
+.user-4 { color: #FF33A6; }
+.user-5 { color: #F4C430; }
+.user-6 { color: #8A2BE2; }
