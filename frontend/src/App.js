@@ -14,48 +14,36 @@ function App() {
   const [enteredUsername, setEnteredUsername] = useState(""); // Username input before joining
   const [userColors, setUserColors] = useState({});
   const [joined, setJoined] = useState(false);
-  const [typingUsers, setTypingUsers] = useState({}); // Track which remote users are typing
+  const [typingUsers, setTypingUsers] = useState({});
+  const [language, setLanguage] = useState("javascript"); // Default to JavaScript
   const editorRef = useRef(null);
-  const monacoRef = useRef(null); // Store monaco instance here
-  const contentWidgets = useRef({}); // To store content widget references
-  const typingTimers = useRef({}); // To manage typing timers per user
+  const monacoRef = useRef(null);
+  const contentWidgets = useRef({});
+  const typingTimers = useRef({});
 
   useEffect(() => {
     if (!joined) return;
 
-    // Join the room once the user has provided a username
     socket.emit("join-room", { roomId, username });
 
-    // When receiving code updates from the server
     const handleCodeUpdate = (newCode) => setCode(newCode);
-
-    // When receiving remote cursor updates, ignore your own events
     const handleCursorUpdate = ({ userId, cursorPosition, username: remoteUsername }) => {
-      if (userId === username) return; // Ignore updates from yourself
-
+      if (userId === username) return;
       setRemoteCursors((prev) => ({
         ...prev,
         [userId]: { cursorPosition, username: remoteUsername },
       }));
-
-      // If no color was assigned yet for this remote user, assign one
       setUserColors((prevColors) => {
-        if (!prevColors[userId]) {
-          return { ...prevColors, [userId]: generateColor(userId) };
-        }
+        if (!prevColors[userId]) return { ...prevColors, [userId]: generateColor(userId) };
         return prevColors;
       });
     };
 
-    // When receiving typing status updates, clear the status if not typing.
     const handleTypingUpdate = ({ userId, username: remoteUsername, isTyping }) => {
-      if (userId === username) return; // Ignore your own events
-
+      if (userId === username) return;
       setTypingUsers((prev) => {
-        // If the remote user is typing, set their name; otherwise remove their entry
-        if (isTyping) {
-          return { ...prev, [userId]: remoteUsername };
-        } else {
+        if (isTyping) return { ...prev, [userId]: remoteUsername };
+        else {
           const newTyping = { ...prev };
           delete newTyping[userId];
           return newTyping;
@@ -74,14 +62,11 @@ function App() {
     };
   }, [joined, username, roomId]);
 
-  // Handle local code changes
   const handleCodeChange = (value) => {
     setCode(value);
     socket.emit("code-change", { roomId, code: value });
-    // Emit that the current user is typing
     socket.emit("typing", { roomId, userId: username, username, isTyping: true });
 
-    // Clear and reset the timer to stop the "typing" status after 2 seconds of inactivity
     if (typingTimers.current[username]) {
       clearTimeout(typingTimers.current[username]);
     }
@@ -90,44 +75,34 @@ function App() {
     }, 2000);
   };
 
-  // When the editor is mounted, listen for cursor movements.
   const handleEditorDidMount = (editor, monaco) => {
     editorRef.current = editor;
-    monacoRef.current = monaco; // Save the monaco instance
+    monacoRef.current = monaco;
 
     editor.onDidChangeCursorPosition((event) => {
-      // Emit the cursor position change to the server.
       socket.emit("cursor-move", {
         roomId,
         cursorPosition: event.position,
         userId: username,
         username,
       });
-      // Do not update local remoteCursors state here; let remote events update that.
     });
   };
 
-  // Render the remote cursors and typing widgets on the editor
   useEffect(() => {
     if (!editorRef.current || !monacoRef.current) return;
     const editor = editorRef.current;
     const monaco = monacoRef.current;
 
-    // Remove previously added widgets
     Object.keys(contentWidgets.current).forEach((id) => {
       const widget = contentWidgets.current[id];
-      if (widget) {
-        editor.removeContentWidget(widget);
-      }
+      if (widget) editor.removeContentWidget(widget);
     });
 
-    // For each remote cursor, add a widget for the cursor label and, if applicable, a typing indicator
     Object.entries(remoteCursors).forEach(([id, { cursorPosition, username: remoteUsername }]) => {
-      // Skip your own cursor (should never happen because of filtering)
       if (id === username) return;
       if (!cursorPosition || !cursorPosition.lineNumber || !cursorPosition.column) return;
 
-      // Create the cursor label
       const cursorLabel = document.createElement("div");
       cursorLabel.className = `cursor-label user-${id}`;
       cursorLabel.textContent = `👤 ${remoteUsername}`;
@@ -145,7 +120,6 @@ function App() {
       contentWidgets.current[`cursor_${id}`] = cursorWidget;
       editor.addContentWidget(cursorWidget);
 
-      // If this remote user is marked as typing, add a typing widget
       if (typingUsers[id]) {
         const typingLabel = document.createElement("div");
         typingLabel.className = `typing-label user-${id}`;
@@ -158,7 +132,6 @@ function App() {
           getPosition: () => ({
             position: {
               lineNumber: cursorPosition.lineNumber,
-              // Position the typing widget a few columns to the right of the cursor.
               column: cursorPosition.column + 5,
             },
             preference: [monaco.editor.ContentWidgetPositionPreference.EXACT],
@@ -171,7 +144,6 @@ function App() {
     });
   }, [remoteCursors, userColors, typingUsers, username]);
 
-  // A helper function to generate a color based on a userId.
   const generateColor = (userId) => {
     const colors = ["#FF5733", "#33FF57", "#3357FF", "#FF33A6", "#F4C430", "#8A2BE2"];
     let hash = 0;
@@ -181,12 +153,18 @@ function App() {
     return colors[Math.abs(hash) % colors.length];
   };
 
-  // Handle joining the room by setting the username.
   const handleJoin = () => {
     if (enteredUsername.trim()) {
       setUsername(enteredUsername);
       setJoined(true);
     }
+  };
+
+  const handleLanguageChange = (e) => {
+    const selected = e.target.value;
+    let mappedLanguage = selected.toLowerCase();
+    if (selected === "C++") mappedLanguage = "cpp";
+    setLanguage(mappedLanguage);
   };
 
   return (
@@ -207,10 +185,26 @@ function App() {
       ) : (
         <>
           <h1>Collaborative Code Editor</h1>
+          <div style={{ marginBottom: "10px" }}>
+            <label htmlFor="language-select">Select Language: </label>
+            <select id="language-select" value={language} onChange={handleLanguageChange}>
+              <option value="javascript">JavaScript</option>
+              <option value="java">Java</option>
+              <option value="cpp">C++</option>
+              <option value="c">C</option>
+              <option value="python">Python</option>
+              <option value="html">HTML</option>
+              <option value="css">CSS</option>
+              <option value="plaintext">Plain Text</option>
+            </select>
+            <p style={{ fontSize: "0.9em", color: "#555" }}>
+              Choose the language for proper syntax highlighting.
+            </p>
+          </div>
           <div style={{ border: "1px solid #ccc", borderRadius: "5px", overflow: "hidden" }}>
             <Editor
               height="500px"
-              defaultLanguage="javascript"
+              language={language}
               value={code}
               onChange={handleCodeChange}
               theme="vs-dark"
